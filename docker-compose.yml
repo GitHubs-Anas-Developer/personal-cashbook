@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: cashbook_mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cashbook_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cashbook_backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/personal_cashbook
+      - JWT_SECRET=personal_cashbook_docker_production_jwt_secret_2026
+      - CLIENT_URL=http://localhost:3000
+      - UPLOAD_DIR=uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - cashbook_uploads:/app/uploads
+    networks:
+      - cashbook_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cashbook_frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+    networks:
+      - cashbook_network
+
+volumes:
+  mongo_data:
+    name: cashbook_mongo_data
+  cashbook_uploads:
+    name: cashbook_uploads_data
+
+networks:
+  cashbook_network:
+    name: cashbook_network
+    driver: bridge
